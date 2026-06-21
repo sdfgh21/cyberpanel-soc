@@ -317,6 +317,8 @@ router.post('/scan', authMiddleware, async (req, res) => {
   try {
     const result = await scanWebsite(url.trim(), req.user.username);
     res.json(result);
+    // Générer le devis
+    result.devis = generateDevis(recommendations, hostname);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
