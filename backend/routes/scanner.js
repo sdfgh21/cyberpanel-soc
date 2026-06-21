@@ -73,7 +73,50 @@ async function checkSSL(hostname) {
     req.end();
   });
 }
+// ── Devis Generator ───────────────────────────────────────────
+function generateDevis(recommendations, hostname) {
+  const PRIX = {
+    'SSL/TLS':          { P1: 150, P2: 80,  P3: 50  },
+    'Security Headers': { P1: 200, P2: 120, P3: 60  },
+    'CMS':              { P1: 300, P2: 180, P3: 100 },
+    'Reputation':       { P1: 500, P2: 250, P3: 150 },
+    'default':          { P1: 200, P2: 100, P3: 60  },
+  };
 
+  const lignes = recommendations.map((rec, i) => {
+    const tarifs = PRIX[rec.category] || PRIX['default'];
+    const prix   = tarifs[rec.priority] || 100;
+    return {
+      numero:      i + 1,
+      priorite:    rec.priority,
+      severite:    rec.severity,
+      categorie:   rec.category,
+      titre:       rec.title,
+      description: rec.description,
+      fix:         rec.fix,
+      prix_ht:     prix,
+      tva:         Math.round(prix * 0.20),
+      prix_ttc:    Math.round(prix * 1.20),
+    };
+  });
+
+  const total_ht  = lignes.reduce((s, l) => s + l.prix_ht, 0);
+  const total_tva = Math.round(total_ht * 0.20);
+  const total_ttc = total_ht + total_tva;
+
+  return {
+    numero:      `DEV-${Date.now().toString().slice(-6)}`,
+    date:        new Date().toLocaleDateString('fr-FR'),
+    validite:    new Date(Date.now() + 30*24*60*60*1000).toLocaleDateString('fr-FR'),
+    client:      hostname,
+    lignes,
+    total_ht,
+    total_tva,
+    total_ttc,
+    devise:      'EUR',
+    conditions:  'Paiement à 30 jours. TVA 20%. Devis valable 30 jours.',
+  };
+}
 // ── Recommendations engine ────────────────────────────────────
 function generateRecommendations(headers, ssl, techs, reputation) {
   const recs = [];
