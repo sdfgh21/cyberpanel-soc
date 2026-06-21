@@ -1,0 +1,30 @@
+{
+  "name": "cyber-panel-frontend",
+  "version": "2.1.0",
+  "private": true,
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.21.0",
+    "axios": "^1.6.0",
+    "chart.js": "^4.4.1",
+    "react-chartjs-2": "^5.2.0",
+    "date-fns": "^3.1.0",
+    "react-hot-toast": "^2.4.1",
+    "lucide-react": "^0.303.0",
+    "serve": "^14.2.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.0",
+    "tailwindcss": "^3.4.0",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32"
+  },
+  "scripts": {
+    "dev":   "vite --port 3000",
+    "build": "vite build",
+    "start": "serve -s build -l ${PORT:-3000}",
+    "preview": "vite preview"
+  }
+}
