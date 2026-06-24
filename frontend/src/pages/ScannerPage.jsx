@@ -474,7 +474,7 @@ export default function ScannerPage() {
           </button>
         </form>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px] font-mono text-gray-600">
-          {['✓ DNS & SSL','✓ Security Headers','✓ Technologies','✓ IP Reputation','✓ Score A-F','✓ Recommendations','✓ 💶 Devis auto','✓ Export HTML'].map(f=>(
+          {['✓ DNS & SSL','✓ Security Headers','✓ Technologies','✓ IP Reputation','✓ Score A-F','✓ Recommendations','✓ Devis auto','✓ Export HTML'].map(f=>(
             <div key={f} className="bg-gray-800/40 rounded px-2 py-1.5">{f}</div>
           ))}
         </div>
