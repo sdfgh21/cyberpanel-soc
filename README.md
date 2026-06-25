@@ -56,8 +56,8 @@ VITE_API_URL=https://your-backend.railway.app
 ```
 
 ## 🌐 Live URLs
-- Frontend: https://zealous-unity-production-7a9f.up.railway.app
-- Backend:  https://cyberpanel-soc-production.up.railway.app
+- Frontend: zealous-unity-production-1492.up.railway.app
+- Backend:  cyberpanel-soc-production.up.railway.app
 
 ## 📁 Structure
 ```
