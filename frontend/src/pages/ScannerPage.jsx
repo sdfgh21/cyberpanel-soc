@@ -17,7 +17,7 @@ const PRIO_RGB     = { P1:[239,68,68], P2:[249,115,22], P3:[234,179,8] };
 function generateDevisPDF(devis) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W = 210, M = 15, CW = W - M * 2;
-  let y = 0;
+  let y = 01;
 
   const addPage = () => { doc.addPage(); y = 20; };
   const checkPage = (needed = 20) => { if (y + needed > 275) addPage(); };
