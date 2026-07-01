@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Search, Shield, Globe, CheckCircle, XCircle,
          Clock, ChevronDown, ChevronUp, Download, Trash2,
          ExternalLink, AlertTriangle, Zap, Lock } from 'lucide-react';
-import { jsPDF } from 'jspdf';
 import api from '../utils/api';
 import { timeAgo, formatDate } from '../utils/helpers.jsx';
 import toast from 'react-hot-toast';
@@ -13,210 +12,233 @@ const SEV_COLORS   = { critical:'text-red-400', high:'text-orange-400', medium:'
 const PRIO_COLORS  = { P1:'text-red-400 bg-red-900/20 border-red-800/30', P2:'text-orange-400 bg-orange-900/20 border-orange-800/30', P3:'text-yellow-400 bg-yellow-900/20 border-yellow-800/30' };
 const PRIO_RGB     = { P1:[239,68,68], P2:[249,115,22], P3:[234,179,8] };
 
-// ── PDF Devis Generator ───────────────────────────────────────
-function generateDevisPDF(devis) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const W = 210, M = 15, CW = W - M * 2;
-  let y = 0;
+// ── PDF Devis Generator (jsPDF 2.5.1) ────────────────────────
+async function generateDevisPDF(devis) {
+  try {
+    // Dynamic import for jsPDF 2.x
+    const { jsPDF } = await import('jspdf');
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-  const addPage = () => { doc.addPage(); y = 20; };
-  const checkPage = (needed = 20) => { if (y + needed > 275) addPage(); };
+    const W = 210, M = 15, CW = W - M * 2;
+    let y = 20;
 
-  // ── Header band ──────────────────────────────────────────
-  doc.setFillColor(15, 23, 42);
-  doc.rect(0, 0, W, 50, 'F');
+    const checkPage = (needed = 20) => {
+      if (y + needed > 275) { doc.addPage(); y = 20; }
+    };
 
-  doc.setFillColor(4, 47, 46);
-  doc.rect(0, 0, 6, 50, 'F');
+    // ── Header ──────────────────────────────────────────────
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, W, 48, 'F');
+    doc.setFillColor(4, 47, 46);
+    doc.rect(0, 0, 5, 48, 'F');
 
-  doc.setFontSize(22); doc.setFont('helvetica', 'bold');
-  doc.setTextColor(255, 255, 255);
-  doc.text('CyberPanel', M, 18);
-
-  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-  doc.setTextColor(20, 184, 166);
-  doc.text('SOC Security Services', M, 25);
-
-  doc.setFontSize(9); doc.setTextColor(148, 163, 184);
-  doc.text(`Devis N° : ${devis.numero}`, M, 33);
-  doc.text(`Date : ${devis.date}   Validité : ${devis.validite}`, M, 39);
-  doc.text(`Client : ${devis.client}`, M, 45);
-
-  // Grade badge top-right
-  doc.setFillColor(20, 184, 166);
-  doc.roundedRect(W - M - 30, 10, 30, 30, 4, 4, 'F');
-  doc.setFontSize(18); doc.setFont('helvetica', 'bold');
-  doc.setTextColor(255, 255, 255);
-  doc.text('DEVIS', W - M - 15, 22, { align: 'center' });
-  doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-  doc.text('REMÉDIATION', W - M - 15, 32, { align: 'center' });
-
-  y = 60;
-
-  // ── Résumé exécutif ──────────────────────────────────────
-  doc.setFillColor(30, 41, 59);
-  doc.roundedRect(M, y, CW, 22, 3, 3, 'F');
-  doc.setFontSize(9); doc.setFont('helvetica', 'bold');
-  doc.setTextColor(20, 184, 166);
-  doc.text('RÉSUMÉ EXÉCUTIF', M + 5, y + 7);
-  doc.setFont('helvetica', 'normal'); doc.setTextColor(148, 163, 184);
-  const resume = `Suite à l'audit de sécurité du site ${devis.client}, nous avons identifié ${devis.lignes.length} point(s) à corriger.`;
-  const resumeLines = doc.splitTextToSize(resume, CW - 10);
-  doc.text(resumeLines, M + 5, y + 14);
-  y += 28;
-
-  // ── Tableau des prestations ──────────────────────────────
-  doc.setFillColor(15, 23, 42);
-  doc.rect(M, y, CW, 8, 'F');
-  doc.setFontSize(8); doc.setFont('helvetica', 'bold');
-  doc.setTextColor(100, 116, 139);
-
-  const cols = { num: M + 3, prio: M + 12, presta: M + 28, cat: M + 115, ht: M + 145, tva: M + 163, ttc: M + 182 };
-  doc.text('#',         cols.num,   y + 5.5);
-  doc.text('PRIO.',     cols.prio,  y + 5.5);
-  doc.text('PRESTATION',cols.presta,y + 5.5);
-  doc.text('CATÉGORIE', cols.cat,   y + 5.5);
-  doc.text('HT',        cols.ht,    y + 5.5);
-  doc.text('TVA',       cols.tva,   y + 5.5);
-  doc.text('TTC',       cols.ttc,   y + 5.5);
-  y += 10;
-
-  devis.lignes.forEach((l, i) => {
-    const pRGB = PRIO_RGB[l.priorite] || [107, 114, 128];
-    const titleLines = doc.splitTextToSize(l.titre, 84);
-    const descLines  = doc.splitTextToSize(l.description || '', 84);
-    const rowH = Math.max(18, (titleLines.length + descLines.length) * 4 + 8);
-
-    checkPage(rowH + 4);
-
-    // Row bg
-    const bg = i % 2 === 0 ? [30, 41, 59] : [22, 32, 49];
-    doc.setFillColor(...bg);
-    doc.rect(M, y, CW, rowH, 'F');
-
-    // # number
-    doc.setFontSize(8); doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 116, 139);
-    doc.text(String(l.numero), cols.num, y + 6);
-
-    // Priority badge
-    doc.setFillColor(pRGB[0], pRGB[1], pRGB[2], 0.15);
-    doc.roundedRect(cols.prio - 1, y + 2, 12, 5, 1, 1, 'F');
-    doc.setTextColor(...pRGB);
-    doc.setFont('helvetica', 'bold');
-    doc.text(l.priorite, cols.prio + 0.5, y + 6);
-
-    // Title
-    doc.setTextColor(226, 232, 240);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.text(titleLines, cols.presta, y + 6);
-
-    // Description
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 116, 139);
-    doc.setFontSize(7);
-    doc.text(descLines, cols.presta, y + 6 + titleLines.length * 4);
-
-    // Category
-    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal');
-    doc.setTextColor(20, 184, 166);
-    doc.text(l.categorie, cols.cat, y + 6);
-
-    // Prices
-    doc.setTextColor(226, 232, 240); doc.setFontSize(8);
-    doc.text(`${l.prix_ht} €`, cols.ht,  y + 6);
-    doc.setTextColor(100, 116, 139);
-    doc.text(`${l.tva} €`,     cols.tva, y + 6);
-    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(20); doc.setFont('helvetica', 'bold');
     doc.setTextColor(255, 255, 255);
-    doc.text(`${l.prix_ttc} €`,cols.ttc, y + 6);
+    doc.text('CyberPanel', M + 2, 16);
 
-    y += rowH + 1;
-  });
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(20, 184, 166);
+    doc.text('SOC Security Services', M + 2, 23);
 
-  // ── Totals band ──────────────────────────────────────────
-  checkPage(25);
-  y += 4;
-  doc.setFillColor(4, 47, 46);
-  doc.roundedRect(M, y, CW, 20, 3, 3, 'F');
+    doc.setFontSize(8); doc.setTextColor(148, 163, 184);
+    doc.text(`Devis N° : ${devis.numero}`, M + 2, 31);
+    doc.text(`Date : ${devis.date}   |   Validite : ${devis.validite}`, M + 2, 37);
+    doc.text(`Client : ${devis.client}`, M + 2, 43);
 
-  doc.setFontSize(8); doc.setFont('helvetica', 'normal');
-  doc.setTextColor(148, 163, 184);
-  doc.text('Total HT', W - M - 90, y + 7);
-  doc.setTextColor(226, 232, 240); doc.setFont('helvetica', 'bold');
-  doc.text(`${devis.total_ht} €`, W - M - 90, y + 13);
+    // Badge top-right
+    doc.setFillColor(20, 184, 166);
+    doc.roundedRect(W - M - 32, 8, 32, 32, 3, 3, 'F');
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text('DEVIS', W - M - 16, 20, { align: 'center' });
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+    doc.text('REMEDIATION', W - M - 16, 27, { align: 'center' });
+    doc.text('SECURITE', W - M - 16, 33, { align: 'center' });
 
-  doc.setFont('helvetica', 'normal'); doc.setTextColor(148, 163, 184);
-  doc.text('TVA 20%', W - M - 55, y + 7);
-  doc.setTextColor(100, 116, 139); doc.setFont('helvetica', 'bold');
-  doc.text(`${devis.total_tva} €`, W - M - 55, y + 13);
+    y = 56;
 
-  doc.setFont('helvetica', 'normal'); doc.setTextColor(148, 163, 184);
-  doc.text('TOTAL TTC', W - M - 20, y + 7, { align: 'right' });
-  doc.setFontSize(13); doc.setFont('helvetica', 'bold');
-  doc.setTextColor(20, 184, 166);
-  doc.text(`${devis.total_ttc} €`, W - M - 20, y + 15, { align: 'right' });
+    // ── Résumé ───────────────────────────────────────────────
+    doc.setFillColor(30, 41, 59);
+    doc.roundedRect(M, y, CW, 18, 2, 2, 'F');
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(20, 184, 166);
+    doc.text('RESUME EXECUTIF', M + 4, y + 6);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(148, 163, 184);
+    const resume = `Suite a l'audit de securite du site ${devis.client}, nous avons identifie ${devis.lignes.length} point(s) a corriger pour ameliorer la posture de securite.`;
+    const resumeLines = doc.splitTextToSize(resume, CW - 8);
+    doc.text(resumeLines, M + 4, y + 12);
+    y += 24;
 
-  y += 26;
-
-  // ── Fix details ──────────────────────────────────────────
-  const fixLines = devis.lignes.filter(l => l.fix);
-  if (fixLines.length > 0) {
-    checkPage(20);
+    // ── Table header ─────────────────────────────────────────
     doc.setFillColor(15, 23, 42);
     doc.rect(M, y, CW, 8, 'F');
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold');
-    doc.setTextColor(20, 184, 166);
-    doc.text('DÉTAIL DES CORRECTIFS TECHNIQUES', M + 5, y + 5.5);
-    y += 10;
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(100, 116, 139);
 
-    fixLines.forEach(l => {
-      const pRGB = PRIO_RGB[l.priorite] || [107, 114, 128];
-      const fixText = doc.splitTextToSize(l.fix, CW - 20);
-      const bh = fixText.length * 4 + 14;
-      checkPage(bh + 4);
+    const C = {
+      num:   M + 3,
+      prio:  M + 11,
+      prest: M + 27,
+      cat:   M + 115,
+      ht:    M + 143,
+      tva:   M + 160,
+      ttc:   M + 177,
+    };
 
-      doc.setFillColor(30, 41, 59);
-      doc.roundedRect(M, y, CW, bh, 2, 2, 'F');
-      doc.setFillColor(4, 47, 46);
-      doc.rect(M, y, 4, bh, 'F');
+    doc.text('#',          C.num,   y + 5.5);
+    doc.text('PRIO',       C.prio,  y + 5.5);
+    doc.text('PRESTATION', C.prest, y + 5.5);
+    doc.text('CATEGORIE',  C.cat,   y + 5.5);
+    doc.text('HT',         C.ht,    y + 5.5);
+    doc.text('TVA',        C.tva,   y + 5.5);
+    doc.text('TTC',        C.ttc,   y + 5.5);
+    y += 9;
 
-      doc.setFontSize(8); doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...pRGB);
-      doc.text(`${l.priorite} — ${l.titre}`, M + 8, y + 6);
+    // ── Table rows ───────────────────────────────────────────
+    devis.lignes.forEach((l, i) => {
+      const pRGB   = PRIO_RGB[l.priorite] || [107, 114, 128];
+      const titreL = doc.splitTextToSize(l.titre || '', 85);
+      const descL  = doc.splitTextToSize(l.description || '', 85);
+      const rowH   = Math.max(16, (titreL.length + descL.length) * 4 + 8);
 
-      doc.setFont('courier', 'normal');
-      doc.setFontSize(7); doc.setTextColor(20, 184, 166);
-      doc.text(fixText, M + 8, y + 12);
-      y += bh + 3;
+      checkPage(rowH + 2);
+
+      // Row background
+      doc.setFillColor(i % 2 === 0 ? 30 : 22, i % 2 === 0 ? 41 : 32, i % 2 === 0 ? 59 : 49);
+      doc.rect(M, y, CW, rowH, 'F');
+
+      // Left accent bar
+      doc.setFillColor(...pRGB);
+      doc.rect(M, y, 2, rowH, 'F');
+
+      // #
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139);
+      doc.text(String(l.numero), C.num, y + 6);
+
+      // Priority badge
+      doc.setFillColor(pRGB[0], pRGB[1], pRGB[2]);
+      doc.roundedRect(C.prio - 0.5, y + 2, 13, 5, 1, 1, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
+      doc.text(l.priorite, C.prio + 6, y + 5.8, { align: 'center' });
+
+      // Title
+      doc.setTextColor(226, 232, 240);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
+      doc.text(titreL, C.prest, y + 6);
+
+      // Description
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139); doc.setFontSize(7);
+      doc.text(descL, C.prest, y + 6 + titreL.length * 4);
+
+      // Category
+      doc.setTextColor(20, 184, 166); doc.setFontSize(7.5);
+      doc.text(l.categorie || '', C.cat, y + 6);
+
+      // Prices
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(200, 210, 220); doc.setFontSize(8);
+      doc.text(`${l.prix_ht} EUR`, C.ht,  y + 6);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`${l.tva} EUR`,     C.tva, y + 6);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(255, 255, 255);
+      doc.text(`${l.prix_ttc} EUR`, C.ttc, y + 6);
+
+      y += rowH + 1;
     });
-  }
 
-  // ── Conditions ───────────────────────────────────────────
-  checkPage(18);
-  y += 4;
-  doc.setFillColor(30, 41, 59);
-  doc.roundedRect(M, y, CW, 14, 2, 2, 'F');
-  doc.setFontSize(7.5); doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 116, 139);
-  doc.text(devis.conditions, M + 5, y + 5);
-  doc.text('Les prix sont donnés à titre indicatif selon la complexité estimée. Tout avenant fera l\'objet d\'un nouveau devis.', M + 5, y + 10);
+    // ── Totals ───────────────────────────────────────────────
+    checkPage(22);
+    y += 3;
+    doc.setFillColor(4, 47, 46);
+    doc.roundedRect(M, y, CW, 18, 2, 2, 'F');
 
-  // ── Footer ───────────────────────────────────────────────
-  const totalPages = doc.getNumberOfPages();
-  for (let p = 1; p <= totalPages; p++) {
-    doc.setPage(p);
-    doc.setFillColor(15, 23, 42);
-    doc.rect(0, 287, W, 10, 'F');
+    const totX = W - M;
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(148, 163, 184);
+    doc.text('Total HT',  totX - 88, y + 6);
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(226, 232, 240);
+    doc.text(`${devis.total_ht} EUR`, totX - 88, y + 13);
+
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(148, 163, 184);
+    doc.text('TVA 20%', totX - 55, y + 6);
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
+    doc.text(`${devis.total_tva} EUR`, totX - 55, y + 13);
+
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(148, 163, 184);
+    doc.text('TOTAL TTC', totX - 18, y + 6, { align: 'right' });
+    doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(20, 184, 166);
+    doc.text(`${devis.total_ttc} EUR`, totX - 18, y + 15, { align: 'right' });
+    y += 24;
+
+    // ── Fix details ──────────────────────────────────────────
+    const fixItems = devis.lignes.filter(l => l.fix);
+    if (fixItems.length > 0) {
+      checkPage(16);
+      doc.setFillColor(15, 23, 42);
+      doc.rect(M, y, CW, 8, 'F');
+      doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+      doc.setTextColor(20, 184, 166);
+      doc.text('DETAIL DES CORRECTIFS TECHNIQUES', M + 4, y + 5.5);
+      y += 10;
+
+      fixItems.forEach(l => {
+        const pRGB   = PRIO_RGB[l.priorite] || [107, 114, 128];
+        const fixL   = doc.splitTextToSize(l.fix, CW - 16);
+        const blockH = fixL.length * 4 + 12;
+        checkPage(blockH + 3);
+
+        doc.setFillColor(22, 32, 49);
+        doc.roundedRect(M, y, CW, blockH, 2, 2, 'F');
+        doc.setFillColor(...pRGB);
+        doc.rect(M, y, 3, blockH, 'F');
+
+        doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...pRGB);
+        doc.text(`${l.priorite} -- ${l.titre}`, M + 7, y + 6);
+
+        doc.setFont('courier', 'normal');
+        doc.setFontSize(6.5); doc.setTextColor(20, 184, 166);
+        doc.text(fixL, M + 7, y + 11);
+        y += blockH + 3;
+      });
+    }
+
+    // ── Conditions ───────────────────────────────────────────
+    checkPage(16);
+    y += 3;
+    doc.setFillColor(22, 32, 49);
+    doc.roundedRect(M, y, CW, 14, 2, 2, 'F');
     doc.setFontSize(7); doc.setFont('helvetica', 'normal');
     doc.setTextColor(71, 85, 105);
-    doc.text(`CyberPanel SOC — Devis ${devis.numero} — ${devis.date}`, M, 293);
-    doc.text(`Page ${p} / ${totalPages}`, W - M, 293, { align: 'right' });
-  }
+    doc.text(devis.conditions || '', M + 4, y + 5);
+    doc.text('Les prix sont indicatifs selon la complexite estimee. Tout avenant fera l\'objet d\'un nouveau devis.', M + 4, y + 10);
 
-  doc.save(`devis-${devis.numero}-${devis.client}.pdf`);
-  toast.success('Devis PDF téléchargé !');
+    // ── Footer on every page ─────────────────────────────────
+    const totalPages = doc.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, 285, W, 12, 'F');
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+      doc.setTextColor(71, 85, 105);
+      doc.text(`CyberPanel SOC -- Devis ${devis.numero} -- ${devis.date}`, M, 291);
+      doc.text(`Page ${p} / ${totalPages}`, W - M, 291, { align: 'right' });
+    }
+
+    // ── Save ─────────────────────────────────────────────────
+    doc.save(`devis-${devis.numero}-${devis.client}.pdf`);
+    toast.success('Devis PDF téléchargé !');
+
+  } catch (err) {
+    console.error('PDF error:', err);
+    toast.error('Erreur PDF: ' + err.message);
+  }
 }
 
 // ── Sub-components ────────────────────────────────────────────
@@ -246,7 +268,7 @@ function RecommendationCard({ rec, index }) {
         <span className={`text-[10px] font-mono ${SEV_COLORS[rec.severity]||'text-gray-400'}`}>{rec.severity?.toUpperCase()}</span>
         <span className="text-xs font-medium text-gray-200 flex-1">{rec.title}</span>
         <span className="text-[10px] text-gray-500 font-mono">{rec.category}</span>
-        {open ? <ChevronUp className="w-3.5 h-3.5 text-gray-600"/> : <ChevronDown className="w-3.5 h-3.5 text-gray-600"/>}
+        {open?<ChevronUp className="w-3.5 h-3.5 text-gray-600"/>:<ChevronDown className="w-3.5 h-3.5 text-gray-600"/>}
       </div>
       {open && (
         <div className="mt-3 space-y-2 fade-in-up">
@@ -267,9 +289,7 @@ function DevisSection({ devis }) {
             <span className="text-lg font-bold font-mono text-cyber-400">{devis.numero}</span>
             <span className="text-[10px] text-gray-500 font-mono uppercase bg-gray-800/60 px-2 py-0.5 rounded">Devis de remédiation</span>
           </div>
-          <div className="text-xs text-gray-500 font-mono mt-1">
-            Émis le {devis.date} · Valable jusqu'au {devis.validite} · {devis.client}
-          </div>
+          <div className="text-xs text-gray-500 font-mono mt-1">Émis le {devis.date} · Valable jusqu'au {devis.validite} · {devis.client}</div>
         </div>
         <button onClick={() => generateDevisPDF(devis)} className="btn-primary">
           <Download className="w-4 h-4"/>Télécharger PDF
@@ -306,17 +326,13 @@ function DevisSection({ devis }) {
             {devis.lignes.map((l, i) => (
               <tr key={i} className="hover:bg-gray-800/20 transition-colors">
                 <td className="px-3 py-3 text-xs text-gray-500 font-mono">{l.numero}</td>
-                <td className="px-3 py-3">
-                  <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${PRIO_COLORS[l.priorite]}`}>{l.priorite}</span>
-                </td>
+                <td className="px-3 py-3"><span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${PRIO_COLORS[l.priorite]}`}>{l.priorite}</span></td>
                 <td className="px-3 py-3">
                   <div className="text-xs font-medium text-gray-200">{l.titre}</div>
                   <div className="text-[10px] text-gray-500 mt-0.5">{l.description}</div>
                   {l.fix && <div className="mt-1.5 bg-gray-900/60 rounded px-2 py-1.5"><pre className="text-[10px] text-cyber-500 font-mono whitespace-pre-wrap">{l.fix}</pre></div>}
                 </td>
-                <td className="px-3 py-3">
-                  <span className="text-[10px] font-mono text-cyber-700 bg-cyber-900/30 border border-cyber-800/30 px-1.5 py-0.5 rounded-full">{l.categorie}</span>
-                </td>
+                <td className="px-3 py-3"><span className="text-[10px] font-mono text-cyber-700 bg-cyber-900/30 border border-cyber-800/30 px-1.5 py-0.5 rounded-full">{l.categorie}</span></td>
                 <td className="px-3 py-3 text-right text-xs font-mono text-gray-300">{l.prix_ht} €</td>
                 <td className="px-3 py-3 text-right text-xs font-mono text-gray-500">{l.tva} €</td>
                 <td className="px-3 py-3 text-right text-xs font-mono font-bold text-white">{l.prix_ttc} €</td>
@@ -345,9 +361,7 @@ function ScanResult({ result }) {
     <div className="glass-card overflow-hidden fade-in-up">
       <div className="p-5 border-b border-gray-800/60 flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-base font-semibold text-white flex items-center gap-2">
-            <Globe className="w-4 h-4 text-cyber-400"/>{result.hostname}
-          </h2>
+          <h2 className="text-base font-semibold text-white flex items-center gap-2"><Globe className="w-4 h-4 text-cyber-400"/>{result.hostname}</h2>
           <p className="text-[10px] text-gray-500 font-mono mt-0.5">{result.url} · {formatDate(result.timestamp)}</p>
         </div>
         <div className="flex items-center gap-3">
@@ -363,22 +377,16 @@ function ScanResult({ result }) {
           )}
         </div>
       </div>
-
       <div className="flex overflow-x-auto border-b border-gray-800/60 bg-gray-800/20">
-        {TABS.map(t => (
+        {TABS.map(t=>(
           <button key={t} onClick={()=>setSection(t)}
             className={`px-4 py-2.5 text-xs font-mono capitalize whitespace-nowrap transition-colors ${section===t?'text-cyber-400 border-b-2 border-cyber-400 bg-cyber-900/20':'text-gray-500 hover:text-gray-300'}`}>
             {t==='devis'?'💶 Devis':t}
-            {t==='recommendations'&&result.recommendations?.length>0&&(
-              <span className="ml-1.5 bg-red-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5">{result.recommendations.length}</span>
-            )}
-            {t==='devis'&&result.devis&&(
-              <span className="ml-1.5 bg-cyber-600 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5">{result.devis.total_ttc}€</span>
-            )}
+            {t==='recommendations'&&result.recommendations?.length>0&&<span className="ml-1.5 bg-red-500 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5">{result.recommendations.length}</span>}
+            {t==='devis'&&result.devis&&<span className="ml-1.5 bg-cyber-600 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5">{result.devis.total_ttc}€</span>}
           </button>
         ))}
       </div>
-
       <div className="p-5">
         {section==='overview' && (
           <div className="space-y-5">
@@ -399,9 +407,9 @@ function ScanResult({ result }) {
             <div className="space-y-2">
               {result.steps?.map((step,i)=>(
                 <div key={i} className="flex items-center gap-3 text-xs">
-                  {step.status==='done'    && <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0"/>}
-                  {step.status==='error'   && <XCircle     className="w-4 h-4 text-red-400 flex-shrink-0"/>}
-                  {step.status==='running' && <Clock        className="w-4 h-4 text-yellow-400 flex-shrink-0 animate-pulse"/>}
+                  {step.status==='done'&&<CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0"/>}
+                  {step.status==='error'&&<XCircle className="w-4 h-4 text-red-400 flex-shrink-0"/>}
+                  {step.status==='running'&&<Clock className="w-4 h-4 text-yellow-400 flex-shrink-0 animate-pulse"/>}
                   <span className="text-gray-300 font-medium">{step.step}</span>
                   <span className="text-gray-600 font-mono">→ {step.data}</span>
                 </div>
@@ -421,21 +429,13 @@ function ScanResult({ result }) {
           <div className="space-y-1">
             <div className="flex justify-between mb-3">
               <span className="text-xs text-gray-500">{result.headers?.filter(h=>h.present).length||0}/{result.headers?.length||0} headers</span>
-              <div className="flex gap-3 text-[10px] font-mono">
-                <span className="text-green-400">✓ {result.headers?.filter(h=>h.present).length||0}</span>
-                <span className="text-red-400">✗ {result.headers?.filter(h=>!h.present).length||0}</span>
-              </div>
+              <div className="flex gap-3 text-[10px] font-mono"><span className="text-green-400">✓ {result.headers?.filter(h=>h.present).length||0}</span><span className="text-red-400">✗ {result.headers?.filter(h=>!h.present).length||0}</span></div>
             </div>
             {result.headers?.map((h,i)=>(
               <div key={i} className="flex items-center gap-3 py-2 border-b border-gray-800/40 last:border-0">
-                {h.present ? <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0"/> : <XCircle className="w-4 h-4 text-red-400 flex-shrink-0"/>}
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-mono text-gray-300">{h.label}</div>
-                  {h.present && h.value && <div className="text-[10px] text-gray-600 truncate font-mono">{h.value}</div>}
-                </div>
-                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${h.present?'text-green-400 bg-green-900/20':'text-red-400 bg-red-900/20'}`}>
-                  {h.present?'✓ Present':'✗ Missing'}
-                </span>
+                {h.present?<CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0"/>:<XCircle className="w-4 h-4 text-red-400 flex-shrink-0"/>}
+                <div className="flex-1 min-w-0"><div className="text-xs font-mono text-gray-300">{h.label}</div>{h.present&&h.value&&<div className="text-[10px] text-gray-600 truncate font-mono">{h.value}</div>}</div>
+                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${h.present?'text-green-400 bg-green-900/20':'text-red-400 bg-red-900/20'}`}>{h.present?'✓ Present':'✗ Missing'}</span>
               </div>
             ))}
           </div>
@@ -443,75 +443,50 @@ function ScanResult({ result }) {
         {section==='ssl' && (
           <div className="space-y-4">
             <div className={`flex items-center gap-3 p-4 rounded-lg border ${result.ssl?.valid?'bg-green-900/20 border-green-800/30':'bg-red-900/20 border-red-800/30'}`}>
-              {result.ssl?.valid ? <CheckCircle className="w-6 h-6 text-green-400"/> : <XCircle className="w-6 h-6 text-red-400"/>}
-              <div>
-                <div className={`text-sm font-semibold ${result.ssl?.valid?'text-green-400':'text-red-400'}`}>
-                  {result.ssl?.valid ? 'Valid SSL Certificate' : `Invalid: ${result.ssl?.error}`}
-                </div>
-                {result.ssl?.valid && <div className="text-xs text-gray-400">{result.ssl.subject} — {result.ssl.issuer}</div>}
-              </div>
+              {result.ssl?.valid?<CheckCircle className="w-6 h-6 text-green-400"/>:<XCircle className="w-6 h-6 text-red-400"/>}
+              <div><div className={`text-sm font-semibold ${result.ssl?.valid?'text-green-400':'text-red-400'}`}>{result.ssl?.valid?'Valid SSL Certificate':`Invalid: ${result.ssl?.error}`}</div>{result.ssl?.valid&&<div className="text-xs text-gray-400">{result.ssl.subject} — {result.ssl.issuer}</div>}</div>
             </div>
-            {result.ssl?.valid && (
+            {result.ssl?.valid&&(
               <div className="grid grid-cols-2 gap-3">
                 {[['Expiry',formatDate(result.ssl.expiry)],['Days Left',`${result.ssl.daysLeft} days`],['Protocol',result.ssl.protocol||'TLS'],['Status',result.ssl.expired?'❌ Expired':result.ssl.expiringSoon?'⚠️ Expiring Soon':'✅ Valid']].map(([l,v])=>(
-                  <div key={l} className="bg-gray-800/40 rounded-lg p-3">
-                    <div className="text-[10px] text-gray-500 font-mono uppercase">{l}</div>
-                    <div className="text-xs text-gray-200 mt-1 font-mono">{v}</div>
-                  </div>
+                  <div key={l} className="bg-gray-800/40 rounded-lg p-3"><div className="text-[10px] text-gray-500 font-mono uppercase">{l}</div><div className="text-xs text-gray-200 mt-1 font-mono">{v}</div></div>
                 ))}
               </div>
             )}
           </div>
         )}
         {section==='techs' && (
-          <div>
-            {!result.technologies?.length ? <p className="text-gray-600 font-mono text-sm">No technologies detected</p> : (
-              <div className="flex flex-wrap gap-2">
-                {result.technologies.map((t,i)=>(
-                  <div key={i} className="bg-gray-800/40 border border-gray-700/40 rounded-lg px-3 py-2">
-                    <div className="text-xs font-medium text-gray-200">{t.name}</div>
-                    <div className="text-[10px] text-gray-500 font-mono capitalize">{t.category}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <div>{!result.technologies?.length?<p className="text-gray-600 font-mono text-sm">No technologies detected</p>:(
+            <div className="flex flex-wrap gap-2">{result.technologies.map((t,i)=><div key={i} className="bg-gray-800/40 border border-gray-700/40 rounded-lg px-3 py-2"><div className="text-xs font-medium text-gray-200">{t.name}</div><div className="text-[10px] text-gray-500 font-mono capitalize">{t.category}</div></div>)}</div>
+          )}</div>
         )}
         {section==='reputation' && (
-          <div>
-            {result.reputation?.abuseipdb ? (
-              <div className={`p-4 rounded-lg border ${result.reputation.abuseipdb.abuseConfidenceScore>50?'bg-red-900/20 border-red-800/30':'bg-green-900/20 border-green-800/30'}`}>
-                <div className="text-sm font-semibold text-gray-200 mb-3">AbuseIPDB Report</div>
-                <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-                  {[['IP',result.reputation.abuseipdb.ipAddress],['Score',`${result.reputation.abuseipdb.abuseConfidenceScore}%`],['Reports',result.reputation.abuseipdb.totalReports||0],['ISP',result.reputation.abuseipdb.isp||'—'],['Country',result.reputation.abuseipdb.countryCode||'—'],['Usage',result.reputation.abuseipdb.usageType||'—']].map(([l,v])=>(
-                    <div key={l}><span className="text-gray-500">{l}: </span><span className="text-gray-200">{v}</span></div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Shield className="w-10 h-10 text-gray-700 mx-auto mb-2"/>
-                <p className="text-gray-500 font-mono text-sm">Add <code className="text-cyber-400">ABUSEIPDB_API_KEY</code> in Railway Variables</p>
-              </div>
-            )}
-          </div>
+          <div>{result.reputation?.abuseipdb?(
+            <div className={`p-4 rounded-lg border ${result.reputation.abuseipdb.abuseConfidenceScore>50?'bg-red-900/20 border-red-800/30':'bg-green-900/20 border-green-800/30'}`}>
+              <div className="text-sm font-semibold text-gray-200 mb-3">AbuseIPDB</div>
+              <div className="grid grid-cols-2 gap-3 text-xs font-mono">{[['IP',result.reputation.abuseipdb.ipAddress],['Score',`${result.reputation.abuseipdb.abuseConfidenceScore}%`],['Reports',result.reputation.abuseipdb.totalReports||0],['ISP',result.reputation.abuseipdb.isp||'—'],['Country',result.reputation.abuseipdb.countryCode||'—'],['Usage',result.reputation.abuseipdb.usageType||'—']].map(([l,v])=>(
+                <div key={l}><span className="text-gray-500">{l}: </span><span className="text-gray-200">{v}</span></div>
+              ))}</div>
+            </div>
+          ):(
+            <div className="text-center py-8"><Shield className="w-10 h-10 text-gray-700 mx-auto mb-2"/><p className="text-gray-500 font-mono text-sm">Add <code className="text-cyber-400">ABUSEIPDB_API_KEY</code> in Railway Variables</p></div>
+          )}</div>
         )}
         {section==='recommendations' && (
           <div className="space-y-3">
-            {!result.recommendations?.length ? (
-              <div className="text-center py-8"><CheckCircle className="w-10 h-10 text-green-400 mx-auto mb-2"/>
-                <p className="text-green-400 font-mono">No critical issues found!</p></div>
-            ) : (
-              <>
+            {!result.recommendations?.length?(
+              <div className="text-center py-8"><CheckCircle className="w-10 h-10 text-green-400 mx-auto mb-2"/><p className="text-green-400 font-mono">No issues found!</p></div>
+            ):(
+              <>{
                 <div className="flex gap-2 text-xs font-mono mb-3 flex-wrap">
-                  {['P1','P2','P3'].map(p=>{const c=result.recommendations.filter(r=>r.priority===p).length; return c?<span key={p} className={`px-2 py-0.5 rounded border ${PRIO_COLORS[p]}`}>{p}: {c}</span>:null;})}
+                  {['P1','P2','P3'].map(p=>{const c=result.recommendations.filter(r=>r.priority===p).length;return c?<span key={p} className={`px-2 py-0.5 rounded border ${PRIO_COLORS[p]}`}>{p}: {c}</span>:null;})}
                 </div>
-                {result.recommendations.map((rec,i)=><RecommendationCard key={i} rec={rec} index={i}/>)}
-              </>
+              }
+              {result.recommendations.map((rec,i)=><RecommendationCard key={i} rec={rec} index={i}/>)}</>
             )}
           </div>
         )}
-        {section==='devis' && (result.devis ? <DevisSection devis={result.devis}/> : <div className="text-center py-8 text-gray-600 font-mono">No devis available</div>)}
+        {section==='devis' && (result.devis?<DevisSection devis={result.devis}/>:<div className="text-center py-8 text-gray-600 font-mono">No devis available</div>)}
       </div>
     </div>
   );
@@ -524,33 +499,30 @@ export default function ScannerPage() {
   const [result, setResult]     = useState(null);
   const [history, setHistory]   = useState([]);
 
-  useEffect(() => { api.get('/scanner/history').then(r=>setHistory(r.data)).catch(()=>{}); }, []);
+  useEffect(()=>{ api.get('/scanner/history').then(r=>setHistory(r.data)).catch(()=>{}); },[]);
 
   const handleScan = async (e) => {
     e.preventDefault();
     if (!url.trim()) return;
     setScanning(true); setResult(null);
     try {
-      const {data} = await api.post('/scanner/scan', { url:url.trim() });
+      const {data} = await api.post('/scanner/scan',{url:url.trim()});
       setResult(data);
       setHistory(h=>[{id:Date.now(),url:data.url,score:data.score,grade:data.grade,created_at:data.timestamp},...h].slice(0,20));
       toast.success(`Grade ${data.grade} · Devis: ${data.devis?.total_ttc||0}€ TTC`);
-    } catch(err) { toast.error(err.response?.data?.error||'Scan failed'); }
-    finally { setScanning(false); }
+    } catch(err){ toast.error(err.response?.data?.error||'Scan failed'); }
+    finally{ setScanning(false); }
   };
 
   return (
     <div className="space-y-5">
-      {/* ── HERO SECTION ── */}
+      {/* ── HERO ── */}
       <div className="relative glass-card overflow-hidden border border-cyber-800/30">
-        {/* Background glow */}
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-0 left-1/4 w-64 h-64 bg-cyber-900/20 rounded-full blur-3xl"/>
           <div className="absolute bottom-0 right-1/4 w-64 h-64 bg-blue-900/10 rounded-full blur-3xl"/>
         </div>
-
         <div className="relative p-8">
-          {/* Title */}
           <div className="text-center mb-6">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-cyber-900/60 border border-cyber-700/50 mb-4">
               <Shield className="w-8 h-8 text-cyber-400"/>
@@ -558,46 +530,29 @@ export default function ScannerPage() {
             <h1 className="text-2xl font-bold text-white">Web Security Scanner</h1>
             <p className="text-gray-500 font-mono text-sm mt-1">Analyse complète · Score A–F · Devis PDF automatique</p>
           </div>
-
-          {/* Feature chips */}
           <div className="flex flex-wrap justify-center gap-2 mb-6">
-            {[
-              { icon: Globe,         label: 'DNS & IPs'         },
-              { icon: Lock,          label: 'SSL/TLS'           },
-              { icon: AlertTriangle, label: 'Security Headers'  },
-              { icon: Zap,           label: 'Technologies'      },
-              { icon: Shield,        label: 'IP Reputation'     },
-              { icon: CheckCircle,   label: 'Score A–F'         },
-              { icon: Download,      label: 'Devis PDF'         },
-            ].map(({ icon: Icon, label }) => (
+            {[{icon:Globe,label:'DNS & IPs'},{icon:Lock,label:'SSL/TLS'},{icon:AlertTriangle,label:'Security Headers'},{icon:Zap,label:'Technologies'},{icon:Shield,label:'IP Reputation'},{icon:CheckCircle,label:'Score A–F'},{icon:Download,label:'Devis PDF'}].map(({icon:Icon,label})=>(
               <div key={label} className="flex items-center gap-1.5 bg-gray-800/60 border border-gray-700/40 rounded-full px-3 py-1 text-[11px] font-mono text-gray-400">
                 <Icon className="w-3 h-3 text-cyber-500"/>{label}
               </div>
             ))}
           </div>
-
-          {/* Big scan form */}
           <form onSubmit={handleScan} className="flex gap-3 max-w-2xl mx-auto">
             <div className="relative flex-1">
               <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500"/>
-              <input
-                type="text" value={url} onChange={e=>setUrl(e.target.value)}
+              <input type="text" value={url} onChange={e=>setUrl(e.target.value)}
                 placeholder="https://exemple.com ou exemple.com"
                 className="w-full bg-gray-800/80 border border-gray-600/60 rounded-xl px-4 py-3.5 pl-12 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-cyber-500 focus:ring-2 focus:ring-cyber-500/20 transition-all text-sm font-mono"
-                autoFocus
-              />
+                autoFocus/>
             </div>
             <button type="submit" disabled={scanning||!url.trim()}
-              className="bg-cyber-600 hover:bg-cyber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-8 py-3.5 rounded-xl transition-colors flex items-center gap-2 text-sm whitespace-nowrap">
-              {scanning
-                ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/><span className="font-mono">Analyse...</span></>
-                : <><Search className="w-4 h-4"/>Analyser le site</>}
+              className="bg-cyber-600 hover:bg-cyber-500 disabled:opacity-50 text-white font-semibold px-8 py-3.5 rounded-xl transition-colors flex items-center gap-2 text-sm whitespace-nowrap">
+              {scanning?<><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/><span className="font-mono">Analyse...</span></>:<><Search className="w-4 h-4"/>Analyser le site</>}
             </button>
           </form>
         </div>
       </div>
 
-      {/* ── SCANNING ANIMATION ── */}
       {scanning && (
         <div className="glass-card p-10 text-center space-y-4">
           <div className="relative w-20 h-20 mx-auto">
@@ -606,24 +561,22 @@ export default function ScannerPage() {
             <div className="absolute inset-4 rounded-full border-2 border-cyber-300/40 animate-ping" style={{animationDelay:'0.6s'}}/>
             <Shield className="absolute inset-0 m-auto w-10 h-10 text-cyber-400 animate-pulse"/>
           </div>
-          <p className="text-cyber-400 font-mono font-semibold">Analyse en cours : {url}</p>
+          <p className="text-cyber-400 font-mono font-semibold">Analyse : {url}</p>
           <div className="flex flex-wrap justify-center gap-3 text-[10px] font-mono text-gray-600">
-            {['DNS','SSL','Headers','Technologies','Réputation IP','Score','Devis'].map(s=>(
+            {['DNS','SSL','Headers','Technologies','Réputation IP','Score','Devis PDF'].map(s=>(
               <span key={s} className="flex items-center gap-1"><span className="w-1.5 h-1.5 bg-cyber-500 rounded-full animate-pulse"/>{s}</span>
             ))}
           </div>
         </div>
       )}
 
-      {/* ── RESULTS ── */}
       {result && !scanning && <ScanResult result={result}/>}
 
-      {/* ── HISTORY ── */}
-      {history.length > 0 && (
+      {history.length>0 && (
         <div className="glass-card overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-800/60 flex items-center gap-2">
             <Clock className="w-4 h-4 text-cyber-400"/>
-            <span className="text-sm font-semibold text-gray-300">Historique des scans</span>
+            <span className="text-sm font-semibold text-gray-300">Historique</span>
             <span className="text-xs text-gray-600 font-mono ml-auto">{history.length} scans</span>
           </div>
           <div className="divide-y divide-gray-800/40">
@@ -635,14 +588,8 @@ export default function ScannerPage() {
                   <div className="text-[10px] text-gray-600 font-mono">{scan.score}/100 · {timeAgo(scan.created_at)}</div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <button onClick={async()=>{try{const{data}=await api.get(`/scanner/${scan.id}`);setResult(data.raw||data);}catch{toast.error('Failed');}}}
-                    className="text-gray-600 hover:text-cyber-400 transition-colors" title="Voir résultats">
-                    <ExternalLink className="w-4 h-4"/>
-                  </button>
-                  <button onClick={async()=>{await api.delete(`/scanner/${scan.id}`);setHistory(h=>h.filter(x=>x.id!==scan.id));toast.success('Supprimé');}}
-                    className="text-gray-600 hover:text-red-400 transition-colors" title="Supprimer">
-                    <Trash2 className="w-4 h-4"/>
-                  </button>
+                  <button onClick={async()=>{try{const{data}=await api.get(`/scanner/${scan.id}`);setResult(data.raw||data);}catch{toast.error('Failed');}}} className="text-gray-600 hover:text-cyber-400"><ExternalLink className="w-4 h-4"/></button>
+                  <button onClick={async()=>{await api.delete(`/scanner/${scan.id}`);setHistory(h=>h.filter(x=>x.id!==scan.id));toast.success('Supprimé');}} className="text-gray-600 hover:text-red-400"><Trash2 className="w-4 h-4"/></button>
                 </div>
               </div>
             ))}
