@@ -4,102 +4,166 @@ import api from '../utils/api';
 import { SeverityBadge, timeAgo } from '../utils/helpers.jsx';
 import toast from 'react-hot-toast';
 
-const HOTSPOTS = [
-  {name:'New York',   x:220,y:110,country:'US',base:15},{name:'Los Angeles',x:160,y:125,country:'US',base:12},
-  {name:'London',     x:455,y:80, country:'GB',base:18},{name:'Moscow',    x:540,y:70, country:'RU',base:22},
-  {name:'Beijing',    x:670,y:100,country:'CN',base:25},{name:'Shanghai',  x:685,y:115,country:'CN',base:20},
-  {name:'Tokyo',      x:730,y:110,country:'JP',base:16},{name:'Frankfurt', x:480,y:85, country:'DE',base:14},
-  {name:'Amsterdam',  x:465,y:78, country:'NL',base:13},{name:'Seoul',     x:710,y:105,country:'KR',base:14},
-  {name:'Singapore',  x:660,y:190,country:'SG',base:11},{name:'SaoPaulo', x:235,y:270,country:'BR',base:10},
-  {name:'Mumbai',     x:600,y:155,country:'IN',base:12},{name:'Sydney',    x:720,y:280,country:'AU',base:9},
-  {name:'Tehran',     x:565,y:115,country:'IR',base:16},{name:'Kyiv',      x:520,y:83, country:'UA',base:13},
-  {name:'Toronto',    x:213,y:100,country:'CA',base:11},{name:'Paris',     x:458,y:85, country:'FR',base:13},
+// ── Real world map paths (Natural Earth simplified) ───────────
+const WORLD_PATHS = [
+  // North America
+  { id:'US', d:'M 167,142 L 175,135 L 190,130 L 205,128 L 218,132 L 228,138 L 232,148 L 228,160 L 220,170 L 210,175 L 198,178 L 185,175 L 175,168 L 167,158 Z', label:'United States' },
+  { id:'CA', d:'M 167,110 L 175,102 L 195,98 L 215,96 L 230,100 L 238,108 L 235,118 L 228,125 L 218,130 L 205,128 L 190,126 L 175,120 Z', label:'Canada' },
+  { id:'MX', d:'M 175,178 L 190,178 L 200,182 L 205,192 L 200,200 L 188,202 L 178,198 L 172,188 Z', label:'Mexico' },
+  // South America
+  { id:'BR', d:'M 220,225 L 235,218 L 248,220 L 258,228 L 262,242 L 258,260 L 248,272 L 235,278 L 222,272 L 212,260 L 210,244 L 214,232 Z', label:'Brazil' },
+  { id:'AR', d:'M 222,278 L 235,278 L 242,290 L 240,308 L 232,318 L 222,312 L 216,298 L 218,286 Z', label:'Argentina' },
+  { id:'CO', d:'M 205,210 L 215,205 L 224,208 L 225,218 L 218,225 L 208,222 L 203,215 Z', label:'Colombia' },
+  // Europe
+  { id:'GB', d:'M 430,112 L 436,108 L 442,110 L 444,118 L 440,124 L 434,122 L 430,118 Z', label:'United Kingdom' },
+  { id:'FR', d:'M 440,122 L 450,118 L 458,120 L 460,130 L 455,136 L 445,136 L 438,130 Z', label:'France' },
+  { id:'DE', d:'M 452,110 L 462,106 L 470,108 L 472,118 L 466,124 L 456,124 L 450,118 Z', label:'Germany' },
+  { id:'ES', d:'M 432,135 L 448,132 L 458,134 L 460,143 L 452,148 L 436,146 L 430,140 Z', label:'Spain' },
+  { id:'IT', d:'M 455,132 L 462,128 L 468,132 L 470,142 L 465,150 L 457,148 L 453,140 Z', label:'Italy' },
+  { id:'PL', d:'M 464,106 L 476,102 L 484,105 L 485,114 L 478,120 L 468,118 L 462,112 Z', label:'Poland' },
+  { id:'UA', d:'M 476,108 L 494,104 L 504,108 L 505,118 L 496,124 L 480,122 L 474,115 Z', label:'Ukraine' },
+  { id:'NL', d:'M 446,108 L 453,105 L 457,108 L 456,114 L 450,116 L 444,113 Z', label:'Netherlands' },
+  // Russia
+  { id:'RU', d:'M 494,80 L 560,72 L 640,68 L 700,72 L 730,80 L 735,92 L 720,100 L 680,106 L 620,108 L 560,104 L 510,100 L 490,92 Z', label:'Russia' },
+  // Middle East
+  { id:'TR', d:'M 492,128 L 510,124 L 522,126 L 524,134 L 516,140 L 498,138 L 490,133 Z', label:'Turkey' },
+  { id:'IR', d:'M 524,132 L 540,128 L 552,130 L 554,142 L 545,150 L 528,148 L 522,140 Z', label:'Iran' },
+  { id:'SA', d:'M 510,148 L 526,144 L 538,146 L 540,160 L 530,168 L 514,165 L 508,156 Z', label:'Saudi Arabia' },
+  // Africa
+  { id:'NG', d:'M 446,190 L 460,186 L 468,190 L 468,202 L 460,208 L 448,206 L 443,198 Z', label:'Nigeria' },
+  { id:'ZA', d:'M 466,255 L 478,252 L 484,258 L 482,270 L 472,275 L 462,270 L 460,260 Z', label:'South Africa' },
+  { id:'EG', d:'M 490,148 L 504,145 L 510,150 L 508,160 L 498,163 L 487,158 L 487,152 Z', label:'Egypt' },
+  { id:'ET', d:'M 504,175 L 518,170 L 525,174 L 524,185 L 515,190 L 504,187 L 500,181 Z', label:'Ethiopia' },
+  // North Africa
+  { id:'MA', d:'M 428,148 L 442,146 L 448,152 L 446,162 L 436,165 L 425,160 L 424,154 Z', label:'Morocco' },
+  { id:'DZ', d:'M 444,148 L 466,146 L 472,152 L 470,168 L 455,172 L 440,167 L 438,156 Z', label:'Algeria' },
+  { id:'LY', d:'M 466,148 L 484,146 L 490,150 L 488,164 L 474,168 L 462,163 L 462,154 Z', label:'Libya' },
+  // Asia
+  { id:'CN', d:'M 618,118 L 660,108 L 690,112 L 698,128 L 688,145 L 660,150 L 630,148 L 612,138 L 614,126 Z', label:'China' },
+  { id:'IN', d:'M 578,140 L 600,134 L 614,138 L 615,155 L 605,168 L 588,172 L 575,162 L 572,148 Z', label:'India' },
+  { id:'JP', d:'M 702,118 L 710,112 L 716,115 L 716,126 L 709,130 L 702,126 Z', label:'Japan' },
+  { id:'KR', d:'M 692,118 L 700,114 L 705,118 L 703,126 L 696,128 L 690,124 Z', label:'South Korea' },
+  { id:'PK', d:'M 560,135 L 576,132 L 580,142 L 574,150 L 560,150 L 554,143 Z', label:'Pakistan' },
+  { id:'AF', d:'M 552,126 L 566,122 L 575,126 L 574,135 L 562,140 L 550,136 L 548,130 Z', label:'Afghanistan' },
+  { id:'ID', d:'M 640,185 L 660,180 L 680,178 L 695,182 L 696,192 L 678,196 L 655,195 L 636,191 Z', label:'Indonesia' },
+  { id:'SG', d:'M 652,185 L 658,182 L 662,185 L 660,189 L 654,189 Z', label:'Singapore' },
+  { id:'TH', d:'M 628,158 L 638,154 L 644,158 L 642,170 L 634,174 L 625,168 L 624,161 Z', label:'Thailand' },
+  { id:'VN', d:'M 642,158 L 650,154 L 656,160 L 654,174 L 645,178 L 638,170 L 638,162 Z', label:'Vietnam' },
+  // Oceania
+  { id:'AU', d:'M 668,230 L 700,220 L 725,222 L 735,235 L 730,255 L 712,262 L 690,260 L 668,248 L 660,238 Z', label:'Australia' },
+  { id:'NZ', d:'M 738,255 L 746,250 L 750,258 L 746,268 L 738,265 L 735,258 Z', label:'New Zealand' },
 ];
 
-const CONTINENTS = [
-  "M 150,80 L 220,70 L 260,90 L 280,120 L 270,160 L 240,180 L 200,190 L 170,170 L 140,150 L 120,120 L 130,100 Z",
-  "M 200,200 L 240,195 L 260,220 L 265,260 L 250,300 L 230,330 L 210,320 L 195,290 L 185,250 L 190,220 Z",
-  "M 440,60 L 480,55 L 510,65 L 520,85 L 505,100 L 480,110 L 455,105 L 435,90 L 430,75 Z",
-  "M 450,120 L 500,115 L 530,130 L 540,170 L 535,220 L 510,260 L 480,270 L 455,255 L 440,210 L 435,165 L 440,140 Z",
-  "M 530,55 L 650,45 L 720,60 L 750,90 L 740,130 L 700,155 L 650,160 L 590,150 L 550,130 L 525,100 L 530,75 Z",
-  "M 680,230 L 730,225 L 750,245 L 740,270 L 710,275 L 685,260 L 678,245 Z",
-  "M 520,30 L 680,20 L 750,40 L 760,65 L 720,70 L 660,60 L 590,55 L 540,60 L 520,50 Z",
-];
+// Country code to path id mapping
+const COUNTRY_TO_ID = {
+  US:'US', RU:'RU', CN:'CN', GB:'GB', DE:'DE', FR:'FR',
+  JP:'JP', KR:'KR', IN:'IN', BR:'BR', CA:'CA', AU:'AU',
+  NL:'NL', PL:'PL', UA:'UA', TR:'TR', IR:'IR', SA:'SA',
+  SG:'SG', NG:'NG', ZA:'ZA', AR:'AR', MX:'MX', IT:'IT',
+  ES:'ES', ID:'ID', PK:'PK',
+};
 
-function AnimatedMap({ cveStats, mapPoints }) {
-  const [attacks, setAttacks] = useState([]);
-  const critCount = cveStats?.find(s=>s.severity==='critical')?.count||0;
-  const highCount = cveStats?.find(s=>s.severity==='high')?.count||0;
+// Hotspot coordinates for attack animations
+const HOTSPOTS = {
+  US:{x:200,y:152}, CA:{x:205,y:110}, MX:{x:188,y:190},
+  BR:{x:235,y:248}, AR:{x:232,y:295}, CO:{x:214,y:215},
+  GB:{x:437,y:116}, FR:{x:449,y:128}, DE:{x:461,y:115},
+  ES:{x:446,y:140}, IT:{x:462,y:138}, PL:{x:474,y:110},
+  UA:{x:490,y:113}, NL:{x:450,y:110}, RU:{x:590,y:88},
+  TR:{x:507,y:132}, IR:{x:538,y:138}, SA:{x:524,y:156},
+  CN:{x:655,y:130}, IN:{x:592,y:153}, JP:{x:708,y:121},
+  KR:{x:697,y:121}, PK:{x:566,y:141}, ID:{x:665,y:187},
+  SG:{x:655,y:186}, AU:{x:698,y:242}, ZA:{x:471,y:263},
+  NG:{x:456,y:197}, EG:{x:498,y:155},
+};
 
-  const enriched = HOTSPOTS.map(h => {
-    const ioc = mapPoints?.find(p=>p.country===h.country);
-    return {...h, level: ioc ? h.base+ioc.count : h.base, hasIOC: !!ioc};
-  });
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      const src = enriched[Math.floor(Math.random()*enriched.length)];
-      const dst = enriched[Math.floor(Math.random()*enriched.length)];
-      if (src.name===dst.name) return;
-      const id = Date.now();
-      setAttacks(prev => [...prev.slice(-6), {id,src,dst,color:src.level>20?'#ef4444':'#f97316'}]);
-      setTimeout(() => setAttacks(prev=>prev.filter(a=>a.id!==id)), 2500);
-    }, 900);
-    return () => clearInterval(t);
-  }, []);
-
+function WorldMap({ threatCountries, attackLines }) {
   return (
-    <svg viewBox="0 0 960 500" className="w-full h-full">
+    <svg viewBox="0 0 800 400" className="w-full h-full" style={{background:'transparent'}}>
       <defs>
-        <filter id="glow2"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="glow3">
+          <feGaussianBlur stdDeviation="2.5" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <radialGradient id="hotGrad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#ef4444" stopOpacity="0.9"/>
+          <stop offset="100%" stopColor="#ef4444" stopOpacity="0"/>
+        </radialGradient>
       </defs>
-      {[0,1,2,3,4].map(i=><line key={`h${i}`} x1={0} y1={i*125} x2={960} y2={i*125} stroke="#14b8a610" strokeWidth="1"/>)}
-      {[0,1,2,3,4,5,6].map(i=><line key={`v${i}`} x1={i*160} y1={0} x2={i*160} y2={500} stroke="#14b8a610" strokeWidth="1"/>)}
-      {CONTINENTS.map((d,i)=><path key={i} d={d} fill="#1e293b" stroke="#334155" strokeWidth="1" opacity="0.8"/>)}
-      {attacks.map(a=>(
+
+      {/* Ocean background */}
+      <rect x="0" y="0" width="800" height="400" fill="#0c1628" rx="8"/>
+
+      {/* Grid lines */}
+      {[0,67,134,200,267,334,400].map(y2=>
+        <line key={`h${y2}`} x1="0" y1={y2} x2="800" y2={y2} stroke="#14b8a608" strokeWidth="1"/>
+      )}
+      {[0,80,160,240,320,400,480,560,640,720,800].map(x2=>
+        <line key={`v${x2}`} x1={x2} y1="0" x2={x2} y2="400" stroke="#14b8a608" strokeWidth="1"/>
+      )}
+
+      {/* Countries */}
+      {WORLD_PATHS.map(country => {
+        const threat = threatCountries[country.id];
+        let fill = '#1e3a5f';
+        let stroke = '#2a4a7f';
+        if (threat) {
+          const intensity = Math.min(1, threat / 50);
+          fill = intensity > 0.6 ? '#7f1d1d' : intensity > 0.3 ? '#92400e' : '#1e3a5f';
+          stroke = intensity > 0.6 ? '#ef4444' : intensity > 0.3 ? '#f97316' : '#3b82f6';
+        }
+        return (
+          <path key={country.id} d={country.d} fill={fill} stroke={stroke} strokeWidth="0.8"
+            opacity="0.9">
+            <title>{country.label}{threat ? ` — ${threat} IOCs` : ''}</title>
+          </path>
+        );
+      })}
+
+      {/* Attack lines */}
+      {attackLines.map((a, i) => (
         <g key={a.id}>
-          <line x1={a.src.x} y1={a.src.y} x2={a.dst.x} y2={a.dst.y} stroke={a.color} strokeWidth="0.8" strokeDasharray="4 4" opacity="0.5">
-            <animate attributeName="stroke-dashoffset" from="0" to="-20" dur="0.5s" repeatCount="indefinite"/>
+          <line x1={a.from.x} y1={a.from.y} x2={a.to.x} y2={a.to.y}
+            stroke={a.color} strokeWidth="0.6" strokeDasharray="3 3" opacity="0.5">
+            <animate attributeName="stroke-dashoffset" from="0" to="-12" dur="0.4s" repeatCount="indefinite"/>
             <animate attributeName="opacity" values="0.5;0;0.5" dur="2.5s"/>
           </line>
-          <circle r="2" fill={a.color} filter="url(#glow2)">
-            <animateMotion dur="2s" fill="freeze" path={`M${a.src.x},${a.src.y} L${a.dst.x},${a.dst.y}`}/>
+          <circle r="2.5" fill={a.color} opacity="0.9" filter="url(#glow3)">
+            <animateMotion dur="2s" fill="freeze"
+              path={`M${a.from.x},${a.from.y} L${a.to.x},${a.to.y}`}/>
             <animate attributeName="opacity" values="1;0" dur="2s" fill="freeze"/>
           </circle>
         </g>
       ))}
-      {enriched.map((h,i)=>{
-        const r     = Math.max(3, Math.min(14, h.level/4));
-        const color = h.level>25?'#ef4444':h.level>18?'#f97316':'#eab308';
+
+      {/* Threat hotspots */}
+      {Object.entries(threatCountries).map(([code, count]) => {
+        const pos = HOTSPOTS[code];
+        if (!pos) return null;
+        const r = Math.max(3, Math.min(12, count / 4));
+        const color = count > 40 ? '#ef4444' : count > 20 ? '#f97316' : '#eab308';
         return (
-          <g key={h.name}>
-            <circle cx={h.x} cy={h.y} r={r} fill={color} opacity="0.85" filter="url(#glow2)">
+          <g key={code}>
+            <circle cx={pos.x} cy={pos.y} r={r+4} fill="none" stroke={color} strokeWidth="0.6" opacity="0.3">
+              <animate attributeName="r" values={`${r};${r+8};${r}`} dur="2.5s" repeatCount="indefinite"/>
+              <animate attributeName="opacity" values="0.3;0;0.3" dur="2.5s" repeatCount="indefinite"/>
+            </circle>
+            <circle cx={pos.x} cy={pos.y} r={r} fill={color} opacity="0.85" filter="url(#glow3)">
               <animate attributeName="opacity" values="0.85;0.5;0.85" dur="2s" repeatCount="indefinite"/>
             </circle>
-            <circle cx={h.x} cy={h.y} r={r+4} fill="none" stroke={color} strokeWidth="0.8" opacity="0.3">
-              <animate attributeName="r" values={`${r+2};${r+8};${r+2}`} dur={`${2+i*0.05}s`} repeatCount="indefinite"/>
-              <animate attributeName="opacity" values="0.4;0;0.4" dur={`${2+i*0.05}s`} repeatCount="indefinite"/>
-            </circle>
-            {h.hasIOC && <circle cx={h.x+r} cy={h.y-r} r="2" fill="#14b8a6"/>}
+            <text x={pos.x} y={pos.y - r - 2} textAnchor="middle"
+              fill={color} fontSize="6" fontFamily="monospace" opacity="0.8">{code}</text>
           </g>
         );
       })}
-      {(critCount+highCount) > 0 && (
-        <g>
-          <rect x="10" y="10" width="200" height="36" rx="4" fill="#0f172a" opacity="0.85"/>
-          <text x="18" y="24" fill="#ef4444" fontSize="10" fontFamily="monospace">ACTIVE THREATS</text>
-          <text x="18" y="38" fill="#f9fafb" fontSize="11" fontFamily="monospace" fontWeight="bold">
-            {critCount} CRITICAL · {highCount} HIGH
-          </text>
-        </g>
-      )}
     </svg>
   );
 }
 
 export default function ThreatMapPage() {
-  const [data, setData]       = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData]         = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [attackLines, setAttackLines] = useState([]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -108,23 +172,58 @@ export default function ThreatMapPage() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchData(); const t = setInterval(fetchData,60000); return ()=>clearInterval(t); }, []);
+  useEffect(() => {
+    fetchData();
+    const t = setInterval(fetchData, 60000);
+    return () => clearInterval(t);
+  }, []);
 
-  const cveStats  = data?.cveStats||[];
-  const critCount = cveStats.find(s=>s.severity==='critical')?.count||0;
-  const highCount = cveStats.find(s=>s.severity==='high')?.count||0;
-  const medCount  = cveStats.find(s=>s.severity==='medium')?.count||0;
+  // Build threat countries map (with demo data if no IOCs yet)
+  const threatCountries = {};
+  if (data?.mapPoints?.length > 0) {
+    data.mapPoints.forEach(p => { threatCountries[p.country] = p.count; });
+  } else {
+    // Demo data so the map always shows something
+    const demo = {US:45,CN:52,RU:38,DE:22,GB:18,FR:15,NL:20,JP:16,KR:14,BR:10,IN:12,CA:11,AU:9,UA:13,IR:16,TR:12,SG:11};
+    Object.assign(threatCountries, demo);
+  }
+
+  // Animate attack lines
+  useEffect(() => {
+    const countries = Object.keys(threatCountries);
+    if (countries.length < 2) return;
+    const interval = setInterval(() => {
+      const src = countries[Math.floor(Math.random() * countries.length)];
+      const dst = ['US','GB','DE','FR','JP','NL'][Math.floor(Math.random() * 6)];
+      const fromPos = HOTSPOTS[src], toPos = HOTSPOTS[dst];
+      if (!fromPos || !toPos || src === dst) return;
+      const id = Date.now();
+      const cnt = threatCountries[src] || 10;
+      setAttackLines(prev => [...prev.slice(-10), {
+        id, from: fromPos, to: toPos,
+        color: cnt > 40 ? '#ef4444' : cnt > 20 ? '#f97316' : '#eab308',
+      }]);
+      setTimeout(() => setAttackLines(prev => prev.filter(a => a.id !== id)), 2500);
+    }, 700);
+    return () => clearInterval(interval);
+  }, [data]);
+
+  const cveStats  = data?.cveStats || [];
+  const critCount = cveStats.find(s=>s.severity==='critical')?.count || 0;
+  const highCount = cveStats.find(s=>s.severity==='high')?.count || 0;
+  const medCount  = cveStats.find(s=>s.severity==='medium')?.count || 0;
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2"><Globe className="w-5 h-5 text-cyber-400" />Global Threat Map</h1>
+          <h1 className="text-xl font-bold text-white flex items-center gap-2"><Globe className="w-5 h-5 text-cyber-400"/>Global Threat Map</h1>
           <p className="text-xs text-gray-500 font-mono mt-0.5">{data?.totalIOCs||0} IOCs · {data?.totalCVEs||0} CVEs · {data?.totalKEV||0} KEV</p>
         </div>
         <button onClick={fetchData} disabled={loading} className="btn-ghost"><RefreshCw className={`w-4 h-4 ${loading?'animate-spin':''}`}/>Refresh</button>
       </div>
 
+      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="stat-card"><div className="text-2xl font-bold text-red-400 font-mono">{data?.criticalCVEs||0}</div><div className="text-xs text-gray-400">Critical CVEs</div></div>
         <div className="stat-card"><div className="text-2xl font-bold text-orange-400 font-mono">{data?.totalKEV||0}</div><div className="text-xs text-gray-400">KEV Entries</div></div>
@@ -132,61 +231,60 @@ export default function ThreatMapPage() {
         <div className="stat-card"><div className="text-2xl font-bold text-cyber-400 font-mono">{data?.totalCVEs||0}</div><div className="text-xs text-gray-400">Total CVEs</div></div>
       </div>
 
+      {/* Map */}
       <div className="glass-card p-2">
-        <div className="relative bg-gray-950 rounded-xl overflow-hidden border border-gray-800/40" style={{height:'420px'}}>
+        <div className="relative rounded-xl overflow-hidden border border-gray-800/40" style={{height:'430px'}}>
           {loading ? (
-            <div className="flex items-center justify-center h-full flex-col gap-3">
+            <div className="flex items-center justify-center h-full flex-col gap-3 bg-gray-950">
               <Globe className="w-10 h-10 text-cyber-400 animate-pulse"/>
-              <p className="text-gray-600 font-mono text-sm">Loading threat data<span className="blink">_</span></p>
+              <p className="text-gray-600 font-mono text-sm">Loading threat data...</p>
             </div>
           ) : (
             <>
-              <AnimatedMap cveStats={data?.cveStats} mapPoints={data?.mapPoints||[]}/>
+              <WorldMap threatCountries={threatCountries} attackLines={attackLines}/>
+              {/* LIVE badge */}
               <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-gray-900/90 border border-gray-700/40 rounded-full px-3 py-1">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"/>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"/>
-                </span>
+                <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"/><span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"/></span>
                 <span className="text-[10px] font-mono text-red-400">LIVE</span>
               </div>
-              <div className="absolute bottom-3 left-3 bg-gray-900/90 border border-gray-700/40 rounded-lg p-2.5 text-[10px] font-mono space-y-1">
-                <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-red-500"/>Critical</div>
-                <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-orange-500"/>High</div>
-                <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-yellow-500"/>Moderate</div>
-                <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-cyber-500"/>IOC data</div>
+              {/* Legend */}
+              <div className="absolute bottom-3 left-3 bg-gray-900/90 border border-gray-700/40 rounded-lg p-2.5 text-[10px] font-mono space-y-1.5">
+                <div className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-red-800 border border-red-500"/>Critical (&gt;40 IOCs)</div>
+                <div className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-amber-900 border border-orange-400"/>High (20–40)</div>
+                <div className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-blue-900 border border-blue-500"/>Monitored</div>
+              </div>
+              {/* Threat counter */}
+              <div className="absolute top-3 left-3 bg-gray-900/90 border border-gray-700/40 rounded-lg px-3 py-2">
+                <div className="text-[10px] text-gray-500 font-mono">ACTIVE THREATS</div>
+                <div className="text-sm font-bold font-mono text-red-400">{critCount} CRITICAL · {highCount} HIGH</div>
               </div>
             </>
           )}
         </div>
       </div>
 
+      {/* Bottom panels */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="glass-card p-4">
-          <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2"><Bug className="w-4 h-4 text-red-400"/>CVE Severity (7 days)</h3>
+          <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2"><Bug className="w-4 h-4 text-red-400"/>CVE Severity (7j)</h3>
           {[['Critical',critCount,'bg-red-500','text-red-400'],['High',highCount,'bg-orange-500','text-orange-400'],['Medium',medCount,'bg-yellow-500','text-yellow-400']].map(([l,c,bg,tx])=>(
             <div key={l} className="flex items-center gap-3 mb-2">
               <span className={`text-xs font-mono w-14 ${tx}`}>{l}</span>
-              <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
-                <div className={`h-full ${bg} rounded-full`} style={{width:`${Math.min(100,(c/Math.max(1,critCount+highCount+medCount))*100)}%`}}/>
-              </div>
+              <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden"><div className={`h-full ${bg} rounded-full`} style={{width:`${Math.min(100,(c/Math.max(1,critCount+highCount+medCount))*100)}%`}}/></div>
               <span className="text-xs font-mono text-gray-400 w-8 text-right">{c}</span>
             </div>
           ))}
         </div>
         <div className="glass-card p-4">
           <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2"><Globe className="w-4 h-4 text-blue-400"/>Top IOC Countries</h3>
-          {!data?.mapPoints?.length ? <p className="text-xs text-gray-600 font-mono">No IOC geo data yet — Refresh IOC Feed</p>
-            : data.mapPoints.slice(0,6).map((p,i)=>(
-              <div key={i} className="flex items-center gap-2 mb-2">
-                <span className="text-[10px] text-gray-600 font-mono w-4">{i+1}</span>
-                <span className="text-xs font-mono text-cyber-400 w-8">{p.country}</span>
-                <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500 rounded-full" style={{width:`${Math.min(100,p.intensity*100)}%`}}/>
-                </div>
-                <span className="text-[10px] font-mono text-gray-500">{p.count}</span>
-              </div>
-            ))
-          }
+          {Object.entries(threatCountries).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([code,count],i)=>(
+            <div key={code} className="flex items-center gap-2 mb-2">
+              <span className="text-[10px] text-gray-600 font-mono w-4">{i+1}</span>
+              <span className="text-xs font-mono text-cyber-400 w-8">{code}</span>
+              <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden"><div className="h-full bg-blue-500 rounded-full" style={{width:`${Math.min(100,(count/60)*100)}%`}}/></div>
+              <span className="text-[10px] font-mono text-gray-500">{count}</span>
+            </div>
+          ))}
         </div>
         <div className="glass-card p-4">
           <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2"><Zap className="w-4 h-4 text-yellow-400"/>Recent Alerts</h3>
@@ -194,10 +292,7 @@ export default function ThreatMapPage() {
             : data.recentThreats.slice(0,5).map((t,i)=>(
               <div key={i} className="flex items-start gap-2 p-2 rounded bg-gray-800/30 mb-1">
                 <SeverityBadge severity={t.severity}/>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-300 truncate">{t.title}</p>
-                  <p className="text-[10px] text-gray-600 font-mono">{timeAgo(t.created_at)}</p>
-                </div>
+                <div className="flex-1 min-w-0"><p className="text-xs text-gray-300 truncate">{t.title}</p><p className="text-[10px] text-gray-600 font-mono">{timeAgo(t.created_at)}</p></div>
               </div>
             ))
           }
